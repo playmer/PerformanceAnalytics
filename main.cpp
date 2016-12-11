@@ -34,25 +34,25 @@ struct PerformanceData
 
   PerformanceData(const char *aName, const char *aFile, int aLine)
     : mName(aName),
-    mFile(aFile),
-    mLine(aLine),
-    mDepth(0),
-    mLevel(0),
-    mTotalTime(0.0f)
+      mFile(aFile),
+      mLine(aLine),
+      mDepth(0),
+      mLevel(0),
+      mTotalTime(0.0f)
   {
     mBeginTime = std::chrono::high_resolution_clock::now();
   }
 
   PerformanceData(PerformanceData &&aOther)
     : mName(aOther.mName),
-    mFile(aOther.mFile),
-    mLine(aOther.mLine),
-    mDepth(aOther.mDepth),
-    mLevel(aOther.mLevel),
-    mBeginTime(aOther.mBeginTime),
-    mEndTime(aOther.mEndTime),
-    mTotalTime(aOther.mTotalTime),
-    mChildren(std::move(aOther.mChildren))
+      mFile(aOther.mFile),
+      mLine(aOther.mLine),
+      mDepth(aOther.mDepth),
+      mLevel(aOther.mLevel),
+      mBeginTime(aOther.mBeginTime),
+      mEndTime(aOther.mEndTime),
+      mTotalTime(aOther.mTotalTime),
+      mChildren(std::move(aOther.mChildren))
   {
 
   }
@@ -88,7 +88,7 @@ struct PerformanceRecorder : public PerformanceData
 
   PerformanceRecorder(const char *aName, const char *aFile, int aLine)
     : PerformanceData(aName, aFile, aLine),
-    mParent(gLastPerformanceCheck)
+      mParent(gLastPerformanceCheck)
   {
     gLastPerformanceCheck = this;
 
@@ -123,53 +123,21 @@ PerformanceRecorder PerformanceRecorder::gRoot{ "Global Root", __FILE__, __LINE_
 
 #define YTRACE(aName, x, y) PerformanceRecorder x##y (aName, __FILE__, __LINE__);
 #define XTRACE(aName, x, y) YTRACE(aName, x, y)
-#define  TRACE(aName, x) XTRACE(aName, x, __COUNTER__)
+#define TRACE(aName, x) XTRACE(aName, x, __COUNTER__)
 
 #define RecordPerf(aName) TRACE(aName, __RECORDER__)
 
-
-
-
-//for (int line = 0; line < lines; line++)
-//{
-//  // Display random stuff
-//  int num_buttons = 10 + ((line & 1) ? line * 9 : line * 3);
-//  for (int n = 0; n < num_buttons; n++)
-//  {
-//    if (n > 0) ImGui::SameLine();
-//    ImGui::PushID(n + line * 1000);
-//    char num_buf[16];
-//    const char* label = (!(n % 15)) ? "FizzBuzz" : (!(n % 3)) ? "Fizz" : (!(n % 5)) ? "Buzz" : (sprintf(num_buf, "%d", n), num_buf);
-//    float hue = n*0.05f;
-//    ImGui::PushStyleColor(ImGuiCol_Button, ImColor::HSV(hue, 0.6f, 0.6f));
-//    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImColor::HSV(hue, 0.7f, 0.7f));
-//    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImColor::HSV(hue, 0.8f, 0.8f));
-//    ImGui::Button(label, ImVec2(40.0f + sinf((float)(line + n)) * 20.0f, 0.0f));
-//
-//    if (ImGui::IsItemHovered())
-//    {
-//      auto color = ImColor::HSV(hue, 0.6f, 0.6f);
-//      ImGui::SetTooltip("Color: H:%f, S:%f, V:%f",
-//                        color.Value.x,
-//                        color.Value.y,
-//                        color.Value.z);
-//    }
-//
-//    ImGui::PopStyleColor(3);
-//    ImGui::PopID();
-//
-//  }
-//}
 
 void DisplayPerf(PerformanceData *aRoot, double aTimeScale, size_t aCount = 0)
 {
   for (auto &perf : aRoot->mChildren)
   {
     ImGui::PushID(&perf);
-
     ImGui::SameLine();
+
+
+    ImGui::PushItemWidth(0.0f);
     ImGui::BeginGroup();
-    //ImGui::SetColumnOffset(ImGui::GetColumnIndex(), 0);
 
     float hue = aCount*0.05f;
 
@@ -197,6 +165,7 @@ void DisplayPerf(PerformanceData *aRoot, double aTimeScale, size_t aCount = 0)
     ImGui::NewLine();
     DisplayPerf(&perf, aTimeScale, aCount + 1);
     ImGui::EndGroup();
+    ImGui::PopItemWidth();
     ImGui::PopID();
   }
 }
@@ -210,6 +179,11 @@ void ShowPerfWindow()
 
   float wheel = ImGui::GetIO().MouseWheel;
 
+
+  ImGui::BeginChild("scrolling", ImVec2(0.0f, 0.0f), true, ImGuiWindowFlags_HorizontalScrollbar);
+
+
+
   if (0.0f > wheel)
   {
     timeWidthScaling /= zoomSpeed;
@@ -219,9 +193,24 @@ void ShowPerfWindow()
     timeWidthScaling *= zoomSpeed;
   }
 
-  ImGui::BeginChild("scrolling", ImVec2(0.0f, 0.0f), true, ImGuiWindowFlags_HorizontalScrollbar);
-
   DisplayPerf(&PerformanceRecorder::gRoot.mChildren[0], timeWidthScaling);
+
+  static float lastScrollMax = ImGui::GetScrollMaxX();
+  float currentScrollMax = ImGui::GetScrollMaxX();
+
+  static float lastScroll = ImGui::GetScrollX();
+  float currentScroll = ImGui::GetScrollX();
+
+  float ratio = lastScroll / lastScrollMax;
+
+  float scroll = ratio * currentScrollMax;
+
+  printf("L: %f LM: %f C: %f CM: %f S:%f\n",
+         lastScroll,
+         lastScrollMax,
+         currentScroll,
+         currentScrollMax,
+         scroll);
 
   if (/*ImGui::IsItemActive() &&*/ ImGui::IsMouseDragging())
   {
@@ -233,9 +222,15 @@ void ShowPerfWindow()
     ImGui::SetScrollX(ImGui::GetScrollX() + offset.x);
     ImGui::SetScrollY(ImGui::GetScrollY() + offset.y);
   }
+  else if (lastScrollMax != currentScrollMax)
+  {
+    //ImGui::SetScrollX(scroll);
+
+    lastScrollMax = currentScrollMax;
+    lastScroll = currentScroll;
+  }
 
   ImGui::EndChild();
-
   ImGui::End();
 }
 
