@@ -170,9 +170,9 @@ void DisplayPerf(PerformanceData *aRoot, double aTimeScale, size_t aCount = 0)
   }
 }
 
-void ShowPerfWindow()
+void ShowPerfWindowTest1()
 {
-  ImGui::Begin("Performance Analyser");
+  ImGui::Begin("Performance Analyser Test 1");
 
   static double timeWidthScaling = 1.0f;
   const double zoomSpeed = 1.15f;
@@ -193,7 +193,7 @@ void ShowPerfWindow()
     timeWidthScaling *= zoomSpeed;
   }
 
-  DisplayPerf(&PerformanceRecorder::gRoot.mChildren[0], timeWidthScaling);
+  DisplayPerf(&PerformanceRecorder::gRoot, timeWidthScaling);
 
   static float lastScrollMax = ImGui::GetScrollMaxX();
   float currentScrollMax = ImGui::GetScrollMaxX();
@@ -205,12 +205,12 @@ void ShowPerfWindow()
 
   float scroll = ratio * currentScrollMax;
 
-  printf("L: %f LM: %f C: %f CM: %f S:%f\n",
-         lastScroll,
-         lastScrollMax,
-         currentScroll,
-         currentScrollMax,
-         scroll);
+  //printf("L: %f LM: %f C: %f CM: %f S:%f\n",
+  //       lastScroll,
+  //       lastScrollMax,
+  //       currentScroll,
+  //       currentScrollMax,
+  //       scroll);
 
   if (ImGui::IsWindowFocused() && ImGui::IsMouseDragging())
   {
@@ -231,6 +231,78 @@ void ShowPerfWindow()
   }
 
   ImGui::EndChild();
+  ImGui::End();
+}
+
+void DrawPerfItem(PerformanceData &aData)
+{
+  auto initialWindowPos = ImGui::GetWindowPos();
+  initialWindowPos.x += 1.0f; 
+  initialWindowPos.y += 1.0f;
+
+  ImVec4 clip_rect(0.0f, 0.0f, 0.0f, 0.0f);
+  
+  //ImVec2 textSize(aData.mTotalTime, ImGui::GetFontSize());
+  ImVec2 boxSize(aData.mTotalTime, ImGui::GetTextLineHeight());
+
+  ImGui::Dummy(boxSize);
+  if (ImGui::IsItemHovered())
+  {
+    ImGui::SetTooltip("%s\n"
+                      "Location: %s:%d\n"
+                      "Children: %d\n"
+                      "Total Time: %fms\n",
+                      aData.mName,
+                      aData.mFile,
+                      aData.mLine,
+                      aData.mChildren.size(),
+                      aData.mTotalTime);
+  }
+
+  ImGui::GetWindowDrawList()->AddRectFilled(initialWindowPos, 
+                                            boxSize,
+                                            ImColor(90, 90, 120, 255));
+
+  ImGui::GetWindowDrawList()->AddText(ImGui::GetFont(), 
+                                      ImGui::GetFontSize(), 
+                                      initialWindowPos, 
+                                      ImColor(255, 255, 255, 255), 
+                                      aData.mName);
+}
+
+
+
+void ShowPerfWindowTest2()
+{
+  ImGui::Begin("Performance Analyser Test 2");
+
+  static double timeWidthScaling = 1.0f;
+  const double zoomSpeed = 1.15f;
+
+  float wheel = ImGui::GetIO().MouseWheel;
+
+  if (0.0f > wheel)
+  {
+    timeWidthScaling /= zoomSpeed;
+  }
+  else if (0.0f < wheel)
+  {
+    timeWidthScaling *= zoomSpeed;
+  }
+
+  DrawPerfItem(PerformanceRecorder::gRoot.mChildren[0]);
+
+  if (ImGui::IsWindowFocused() && ImGui::IsMouseDragging())
+  {
+    ImVec2 offset(0.0f, 0.0f);
+
+    offset.x -= ImGui::GetIO().MouseDelta.x;
+    offset.y -= ImGui::GetIO().MouseDelta.y;
+
+    ImGui::SetScrollX(ImGui::GetScrollX() + offset.x);
+    ImGui::SetScrollY(ImGui::GetScrollY() + offset.y);
+  }
+
   ImGui::End();
 }
 
@@ -329,7 +401,9 @@ int main(int, char**)
     ImGui_ImplGlfwGL3_NewFrame();
 
     ImGui::SetNextWindowPos(ImVec2(350, 20), ImGuiSetCond_FirstUseEver);
-    ShowPerfWindow();
+    ShowPerfWindowTest1();
+    ShowPerfWindowTest2();
+
 
     // Rendering
     int display_w, display_h;
