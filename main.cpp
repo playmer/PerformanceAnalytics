@@ -212,7 +212,7 @@ void ShowPerfWindow()
          currentScrollMax,
          scroll);
 
-  if (/*ImGui::IsItemActive() &&*/ ImGui::IsMouseDragging())
+  if (ImGui::IsWindowFocused() && ImGui::IsMouseDragging())
   {
     ImVec2 offset(0.0f, 0.0f);
 
