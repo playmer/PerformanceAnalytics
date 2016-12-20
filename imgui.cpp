@@ -9165,6 +9165,18 @@ void ImGui::Dummy(const ImVec2& size)
     ItemAdd(bb, NULL);
 }
 
+
+void ImGui::Dummy(const ImVec2& position, const ImVec2& size)
+{
+  ImGuiWindow* window = GetCurrentWindow();
+  if (window->SkipItems)
+    return;
+
+  const ImRect bb(position, position + size);
+  ItemSize(bb);
+  ItemAdd(bb, NULL);
+}
+
 bool ImGui::IsRectVisible(const ImVec2& size)
 {
     ImGuiWindow* window = GetCurrentWindowRead();

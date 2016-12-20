@@ -18,40 +18,44 @@ static void error_callback(int error, const char* description)
   fprintf(stderr, "Error %d: %s\n", error, description);
 }
 
-struct PerformanceData
+
+
+struct PerformanceBlockData
 {
   const char *mName;
   const char *mFile;
-  int         mLine;
+  int mLine;
+};
+
+struct PerformanceData
+{
+  PerformanceBlockData *mBlock;
 
   // How many levels below this are there.
-  size_t      mDepth;
+  //size_t      mDepth;
 
   // What level are we at?
-  size_t      mLevel;
+  //size_t      mLevel;
 
-  double      mTotalTime;
+  std::chrono::time_point<std::chrono::high_resolution_clock> mBeginTime;
+  std::chrono::time_point<std::chrono::high_resolution_clock> mEndTime;
 
-  PerformanceData(const char *aName, const char *aFile, int aLine)
-    : mName(aName),
-      mFile(aFile),
-      mLine(aLine),
-      mDepth(0),
-      mLevel(0),
-      mTotalTime(0.0f)
+  std::vector<PerformanceData> mChildren;
+
+  PerformanceData(PerformanceBlockData *aBlock)
+    : mBlock(aBlock)
+      //mDepth(0),
+      //mLevel(0)
   {
     mBeginTime = std::chrono::high_resolution_clock::now();
   }
 
   PerformanceData(PerformanceData &&aOther)
-    : mName(aOther.mName),
-      mFile(aOther.mFile),
-      mLine(aOther.mLine),
-      mDepth(aOther.mDepth),
-      mLevel(aOther.mLevel),
+    : mBlock(aOther.mBlock),
+      //mDepth(aOther.mDepth),
+      //mLevel(aOther.mLevel),
       mBeginTime(aOther.mBeginTime),
       mEndTime(aOther.mEndTime),
-      mTotalTime(aOther.mTotalTime),
       mChildren(std::move(aOther.mChildren))
   {
 
@@ -60,7 +64,6 @@ struct PerformanceData
   void End()
   {
     mEndTime = std::chrono::high_resolution_clock::now();
-    mTotalTime = TimeTaken();
   }
 
   ~PerformanceData()
@@ -74,11 +77,6 @@ struct PerformanceData
 
     return fp_ms.count();
   }
-
-  std::chrono::time_point<std::chrono::high_resolution_clock> mBeginTime;
-  std::chrono::time_point<std::chrono::high_resolution_clock> mEndTime;
-
-  std::vector<PerformanceData> mChildren;
 };
 
 struct PerformanceRecorder : public PerformanceData
@@ -86,13 +84,13 @@ struct PerformanceRecorder : public PerformanceData
   static PerformanceRecorder gRoot;
   static PerformanceRecorder *gLastPerformanceCheck;
 
-  PerformanceRecorder(const char *aName, const char *aFile, int aLine)
-    : PerformanceData(aName, aFile, aLine),
+  PerformanceRecorder(PerformanceBlockData *aBlock)
+    : PerformanceData(aBlock),
       mParent(gLastPerformanceCheck)
   {
     gLastPerformanceCheck = this;
 
-    mLevel = mParent->mLevel + 1;
+    //mLevel = mParent->mLevel + 1;
   }
 
   ~PerformanceRecorder()
@@ -109,19 +107,25 @@ struct PerformanceRecorder : public PerformanceData
 
     mParent->mChildren.emplace_back(std::move(*self));
 
-    if (mParent->mDepth < (mDepth + 1))
-    {
-      mParent->mDepth = mDepth + 1;
-    }
+    //if (mParent->mDepth < (mDepth + 1))
+    //{
+    //  mParent->mDepth = mDepth + 1;
+    //}
   }
 
   PerformanceRecorder *mParent;
 };
 
-PerformanceRecorder *PerformanceRecorder::gLastPerformanceCheck = &gRoot;
-PerformanceRecorder PerformanceRecorder::gRoot{ "Global Root", __FILE__, __LINE__ };
+PerformanceBlockData gBlockPerf{ "Global Root", __FILE__, __LINE__ };
 
-#define YTRACE(aName, x, y) PerformanceRecorder x##y (aName, __FILE__, __LINE__);
+PerformanceRecorder *PerformanceRecorder::gLastPerformanceCheck = &gRoot;
+PerformanceRecorder PerformanceRecorder::gRoot{ &gBlockPerf };
+
+
+#define YTRACE(aName, x, y) \
+  static PerformanceBlockData __block__##x##y{aName, __FILE__, __LINE__};\
+  PerformanceRecorder __perf__##x##y {&__block__##x##y};
+  //PerformanceBlockData *__block__##x##y = GetPerformanceBlock<decltype(aName), aName, decltype(__FILE__), __FILE__, __LINE__>(); 
 #define XTRACE(aName, x, y) YTRACE(aName, x, y)
 #define TRACE(aName, x) XTRACE(aName, x, __COUNTER__)
 
@@ -141,10 +145,10 @@ void DisplayPerf(PerformanceData *aRoot, double aTimeScale, size_t aCount = 0)
 
     float hue = aCount*0.05f;
 
-    auto size = ImVec2(static_cast<float>(aTimeScale * perf.mTotalTime), 0.0f);
+    auto size = ImVec2(static_cast<float>(aTimeScale * perf.TimeTaken()), 0.0f);
 
     ImGui::PushStyleColor(ImGuiCol_Header, ImColor::HSV(hue, 0.6f, 0.6f));
-    ImGui::Selectable(perf.mName, true, 0, size);
+    ImGui::Selectable(perf.mBlock->mName, true, 0, size);
 
     ImGui::PopStyleColor(1);
 
@@ -155,11 +159,11 @@ void DisplayPerf(PerformanceData *aRoot, double aTimeScale, size_t aCount = 0)
                         "Children: %d\n"
                         "Total Time: %fms\n"
                         "Size: %f\n",
-                        perf.mName,
-                        perf.mFile,
-                        perf.mLine,
+                        perf.mBlock->mName,
+                        perf.mBlock->mFile,
+                        perf.mBlock->mLine,
                         perf.mChildren.size(),
-                        perf.mTotalTime,
+                        perf.TimeTaken(),
                         size.x);
     }
     ImGui::NewLine();
@@ -195,15 +199,15 @@ void ShowPerfWindowTest1()
 
   DisplayPerf(&PerformanceRecorder::gRoot, timeWidthScaling);
 
-  static float lastScrollMax = ImGui::GetScrollMaxX();
-  float currentScrollMax = ImGui::GetScrollMaxX();
+  //static float lastScrollMax = ImGui::GetScrollMaxX();
+  //float currentScrollMax = ImGui::GetScrollMaxX();
+  //
+  //static float lastScroll = ImGui::GetScrollX();
+  //float currentScroll = ImGui::GetScrollX();
 
-  static float lastScroll = ImGui::GetScrollX();
-  float currentScroll = ImGui::GetScrollX();
+  //float ratio = lastScroll / lastScrollMax;
 
-  float ratio = lastScroll / lastScrollMax;
-
-  float scroll = ratio * currentScrollMax;
+  //float scroll = ratio * currentScrollMax;
 
   //printf("L: %f LM: %f C: %f CM: %f S:%f\n",
   //       lastScroll,
@@ -222,42 +226,46 @@ void ShowPerfWindowTest1()
     ImGui::SetScrollX(ImGui::GetScrollX() + offset.x);
     ImGui::SetScrollY(ImGui::GetScrollY() + offset.y);
   }
-  else if (lastScrollMax != currentScrollMax)
-  {
-    //ImGui::SetScrollX(scroll);
-
-    lastScrollMax = currentScrollMax;
-    lastScroll = currentScroll;
-  }
+  //else if (lastScrollMax != currentScrollMax)
+  //{
+  //  //ImGui::SetScrollX(scroll);
+  //
+  //  lastScrollMax = currentScrollMax;
+  //  lastScroll = currentScroll;
+  //}
 
   ImGui::EndChild();
   ImGui::End();
 }
 
+
+
 void DrawPerfItem(PerformanceData &aData)
 {
-  auto initialWindowPos = ImGui::GetWindowPos();
-  initialWindowPos.x += 1.0f; 
-  initialWindowPos.y += 1.0f;
+  auto initialWindowPos = ImGui::GetCursorScreenPos();
+  //initialWindowPos.x += 1.0f; 
+  //initialWindowPos.y += 1.0f;
 
   ImVec4 clip_rect(0.0f, 0.0f, 0.0f, 0.0f);
   
   //ImVec2 textSize(aData.mTotalTime, ImGui::GetFontSize());
-  ImVec2 boxSize(aData.mTotalTime, ImGui::GetTextLineHeight());
+  ImVec2 boxSize(aData.TimeTaken() / 2, ImGui::GetTextLineHeight());
 
-  ImGui::Dummy(boxSize);
+  ImGui::Dummy(initialWindowPos, boxSize);
   if (ImGui::IsItemHovered())
   {
     ImGui::SetTooltip("%s\n"
                       "Location: %s:%d\n"
                       "Children: %d\n"
                       "Total Time: %fms\n",
-                      aData.mName,
-                      aData.mFile,
-                      aData.mLine,
+                      aData.mBlock->mName,
+                      aData.mBlock->mFile,
+                      aData.mBlock->mLine,
                       aData.mChildren.size(),
-                      aData.mTotalTime);
+                      aData.TimeTaken());
   }
+
+  printf("x: %f, y: %f\n", initialWindowPos.x, initialWindowPos.y);
 
   ImGui::GetWindowDrawList()->AddRectFilled(initialWindowPos, 
                                             boxSize,
@@ -267,7 +275,7 @@ void DrawPerfItem(PerformanceData &aData)
                                       ImGui::GetFontSize(), 
                                       initialWindowPos, 
                                       ImColor(255, 255, 255, 255), 
-                                      aData.mName);
+                                      aData.mBlock->mName);
 }
 
 
@@ -313,7 +321,6 @@ using namespace std::chrono_literals;
 void GenerateRecursivePerf(size_t aTimes)
 {
   RecordPerf("GenerateRecursive");
-
 
   std::this_thread::sleep_for(2ms);
 
